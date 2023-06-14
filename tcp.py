@@ -1,4 +1,5 @@
 import asyncio
+import random
 from tcputils import *
 
 
@@ -35,8 +36,24 @@ class Servidor:
             # A flag SYN estar setada significa que é um cliente tentando estabelecer uma conexão nova
             # TODO: talvez você precise passar mais coisas para o construtor de conexão
             conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao)
+
             # TODO: você precisa fazer o handshake aceitando a conexão. Escolha se você acha melhor
             # fazer aqui mesmo ou dentro da classe Conexao.
+            flags = flags ^ flags
+            flags = flags | (FLAGS_SYN | FLAGS_ACK)
+
+            conexao.seq_no = random.randint(0, 0xffff)
+            conexao.ack_no = seq_no + 1
+
+            server_port = dst_port
+            client_port = src_port
+            server_addr = dst_addr
+            client_addr = src_addr
+
+            pass_2_handshake_header = make_header(server_port, client_port, conexao.seq_no, conexao.ack_no, flags)
+            pass_2_handshake_header = fix_checksum(pass_2_handshake_header, server_addr, client_addr)
+            self.rede.enviar(pass_2_handshake_header, client_addr)
+
             if self.callback:
                 self.callback(conexao)
         elif id_conexao in self.conexoes:
@@ -54,6 +71,9 @@ class Conexao:
         self.callback = None
         self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
+        self.seq_no = None
+        self.ack_no = None
+
 
     def _exemplo_timer(self):
         # Esta função é só um exemplo e pode ser removida
