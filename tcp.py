@@ -179,7 +179,7 @@ class Conexao:
     def registrar_recebedor(self, callback):
         """
         Usado pela camada de aplicação para registrar uma função para ser chamada
-        sempre que dados forem corretamente recebidos
+        sempre que dados forem corretamente recebidos.
         """
         self.callback = callback
 
