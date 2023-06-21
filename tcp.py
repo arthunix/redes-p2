@@ -39,20 +39,22 @@ class Servidor:
 
             # TODO: você precisa fazer o handshake aceitando a conexão. Escolha se você acha melhor
             # fazer aqui mesmo ou dentro da classe Conexao.
+
+            # STEP 1
             flags = flags ^ flags
             flags = flags | (FLAGS_SYN | FLAGS_ACK)
 
             conexao.seq_no = random.randint(0, 0xffff)
             conexao.ack_no = seq_no + 1
 
-            server_port = dst_port
-            client_port = src_port
-            server_addr = dst_addr
-            client_addr = src_addr
+            server_port, client_port, server_addr, client_addr = dst_port, src_port, dst_addr, src_addr 
 
             pass_2_handshake_header = make_header(server_port, client_port, conexao.seq_no, conexao.ack_no, flags)
             pass_2_handshake_header = fix_checksum(pass_2_handshake_header, server_addr, client_addr)
             self.rede.enviar(pass_2_handshake_header, client_addr)
+
+            conexao.seq_no += 1
+            # STEP 1
 
             if self.callback:
                 self.callback(conexao)
@@ -69,12 +71,11 @@ class Conexao:
         self.servidor = servidor
         self.id_conexao = id_conexao
         self.callback = None
-        self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
-        #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
         self.seq_no = None
         self.ack_no = None
-
-
+        # self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
+        # self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
+        
     def _exemplo_timer(self):
         # Esta função é só um exemplo e pode ser removida
         print('Este é um exemplo de como fazer um timer')
@@ -85,7 +86,19 @@ class Conexao:
         # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.
         print('recebido payload: %r' % payload)
 
-    # Os métodos abaixo fazem parte da API
+        # STEP 2
+        # In this case it is not the packet we expecting, exactly the next
+        if len(payload) <= 0 or (seq_no != self.ack_no):
+            return
+        self.callback(self, payload)
+        self.ack_no += len(payload) # maybe I will need to modify seq value in function send
+
+        dst_addr, dst_port, src_addr, src_port = self.id_conexao
+
+        pass_2_handshake_header = make_header(src_port, dst_port, self.seq_no, self.ack_no, FLAGS_ACK)
+        pass_2_handshake_header = fix_checksum(pass_2_handshake_header, src_addr, dst_addr)
+        self.servidor.rede.enviar(pass_2_handshake_header, dst_addr)
+        # STEP 2
 
     def registrar_recebedor(self, callback):
         """
