@@ -1,5 +1,6 @@
 import asyncio
 import random
+from time import time
 from tcputils import *
 
 
@@ -73,6 +74,9 @@ class Conexao:
         self.callback = None
         self.seq_no = None
         self.ack_no = None
+        self.timer = None
+        self.timeoutInterval = 1
+        self.pacotes_sem_ack = []
         # self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         # self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
         
@@ -107,6 +111,13 @@ class Conexao:
         """
         self.callback = callback
 
+    #STEP 3
+    def _timer(self):
+        if self.pacotes_sem_ack:
+            envio, _, dst_addr, _ = self.pacotes_sem_ack[0]
+            self.servidor.rede.enviar(envio, dst_addr)
+            self.pacotes_sem_ack[0][3] = None
+            
     def enviar(self, dados):
         """
         Usado pela camada de aplicação para enviar dados
@@ -114,8 +125,27 @@ class Conexao:
         # TODO: implemente aqui o envio de dados.
         # Chame self.servidor.rede.enviar(segmento, dest_addr) para enviar o segmento
         # que você construir para a camada de rede.
-        pass
+   
+        dst_addr, dst_port, src_addr, src_port = self.id_conexao
 
+        flags = 0 | FLAGS_ACK
+
+        for i in range(int(len(dados)/MSS)):
+            ini = i*MSS
+            fim = min(len(dados), (i+1)*MSS)
+
+            payload = dados[ini:fim]
+
+            envio = make_header(src_port, dst_port, self.seq_no, self.ack_no, flags)
+            envio_checksum_ok = fix_checksum(envio+payload, src_addr, dst_addr)
+            self.servidor.rede.enviar(envio_checksum_ok, dst_addr)
+
+            self.timer = asyncio.get_event_loop().call_later(self.timeoutInterval, self._timer)
+            self.pacotes_sem_ack.append( [envio_checksum_ok, len(payload), dst_addr, round(time(), 5)] )
+
+            self.seq_no += len(payload)
+    #STEP 3
+    
     def fechar(self):
         """
         Usado pela camada de aplicação para fechar a conexão
